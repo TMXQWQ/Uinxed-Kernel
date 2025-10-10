@@ -10,12 +10,14 @@
  */
 
 #include "frame.h"
+#include "bitmap.h"
 #include "hhdm.h"
 #include "limine.h"
 #include "page.h"
 #include "printk.h"
 #include "uinxed.h"
 
+log_buffer_t      frame_log;
 frame_allocator_t frame_allocator;
 uint64_t          memory_size = 0;
 
@@ -27,7 +29,7 @@ void init_frame(void)
         struct limine_memmap_entry *region = memory_map->entries[i];
         if (region->type == LIMINE_MEMMAP_USABLE) {
             memory_size = region->base + region->length;
-            plogk("frame: Found usable region at %p (size: %llu KiB)\n", region->base, region->length / 1024);
+            log_buffer_write(&frame_log, "frame: Found usable region at %p (size: %llu KiB)\n", region->base, region->length / 1024);
             break;
         }
     }
@@ -42,9 +44,9 @@ void init_frame(void)
         }
     }
     if (bitmap_address) {
-        plogk("frame: Bitmap allocated at %p (size: %llu KiB)\n", bitmap_address, bitmap_size / 1024);
+        log_buffer_write(&frame_log, "frame: Bitmap allocated at %p (size: %llu KiB)\n", bitmap_address, bitmap_size / 1024);
     } else {
-        plogk("frame: Failed to allocate bitmap memory.\n");
+        log_buffer_write(&frame_log, "frame: Failed to allocate bitmap memory.\n");
         return;
     }
     bitmap_t *bitmap = &frame_allocator.bitmap;
@@ -58,23 +60,25 @@ void init_frame(void)
             size_t frame_count = region->length / 4096;
             origin_frames += frame_count;
             bitmap_set_range(bitmap, start_frame, start_frame + frame_count, 1);
-            plogk("frame: Marked   0x%08x frames from %p as usable.\n", frame_count, region->base);
+            log_buffer_write(&frame_log, "frame: Marked   0x%08x frames from %p as usable.\n", frame_count, region->base);
         }
     }
     size_t bitmap_frame_start = bitmap_address / 4096;
     size_t bitmap_frame_count = (bitmap_size + 4095) / 4096;
     size_t bitmap_frame_end   = bitmap_frame_start + bitmap_frame_count;
     bitmap_set_range(bitmap, bitmap_frame_start, bitmap_frame_end, 0);
-    plogk("frame: Reserved 0x%08x frames for bitmap at %p\n", bitmap_frame_count, bitmap_address);
+
+    log_buffer_write(&frame_log, "frame: Reserved 0x%08x frames for bitmap at %p\n", bitmap_frame_count, bitmap_address);
+
     frame_allocator.origin_frames = origin_frames;
     frame_allocator.usable_frames = origin_frames - bitmap_frame_count;
-    plogk("frame: Total physical frames = 0x%08x (%d KiB)\n", origin_frames, (origin_frames * 4096) >> 10);
-    plogk("frame: Available frames after deducting bitmap usage = 0x%08x (%d "
-          "KiB)\n",
-          frame_allocator.usable_frames, (frame_allocator.usable_frames * 4096) >> 10);
+
+    log_buffer_write(&frame_log, "frame: Total physical frames = 0x%08x (%d KiB)\n", origin_frames, (origin_frames * 4096) >> 10);
+    log_buffer_write(&frame_log, "frame: Available frames after deducting bitmap usage = 0x%08x (%d KiB)\n", frame_allocator.usable_frames,
+                     (frame_allocator.usable_frames * 4096) >> 10);
 }
 
-/* Allocate memory frame */
+/* Allocate memory frames */
 uint64_t alloc_frames(size_t count)
 {
     bitmap_t *bitmap      = &frame_allocator.bitmap;
@@ -86,16 +90,85 @@ uint64_t alloc_frames(size_t count)
     return frame_index * 4096;
 }
 
-/* Free memory frames */
+/* Allocate 2M memory frames */
+uint64_t alloc_frames_2M(size_t count)
+{
+    bitmap_t *bitmap         = &frame_allocator.bitmap;
+    size_t    frames_per_2mb = 512;
+    size_t    total_frames   = count * frames_per_2mb;
+
+    for (size_t i = 0; i < bitmap->length; i += frames_per_2mb) {
+        if (i + total_frames > bitmap->length) break;
+        if (bitmap_range_all(bitmap, i, i + total_frames, 1)) {
+            bitmap_set_range(bitmap, i, i + total_frames, 0);
+            frame_allocator.usable_frames -= total_frames;
+            return i * 4096;
+        }
+    }
+    return 0;
+}
+
+/* Allocate 1G memory frames */
+uint64_t alloc_frames_1G(size_t count)
+{
+    bitmap_t *bitmap         = &frame_allocator.bitmap;
+    size_t    frames_per_1gb = 262144;
+    size_t    total_frames   = count * frames_per_1gb;
+
+    for (size_t i = 0; i < bitmap->length; i += frames_per_1gb) {
+        if (i + total_frames > bitmap->length) break;
+        if (bitmap_range_all(bitmap, i, i + total_frames, 1)) {
+            bitmap_set_range(bitmap, i, i + total_frames, 0);
+            frame_allocator.usable_frames -= total_frames;
+            return i * 4096;
+        }
+    }
+    return 0;
+}
+
+/* Free a memory frame */
 void free_frame(uint64_t addr)
 {
     if (!addr) return;
     size_t frame_index = addr / 4096;
 
-    if (frame_index == 0) return;
+    if (!frame_index) return;
     bitmap_t *bitmap = &frame_allocator.bitmap;
     bitmap_set(bitmap, frame_index, 1);
     frame_allocator.usable_frames++;
+}
+
+/* Free memory frames */
+void free_frames(uint64_t addr, size_t count)
+{
+    if (!addr || !count) return;
+    size_t frame_index = addr / 4096;
+
+    if (!frame_index) return;
+    bitmap_t *bitmap = &frame_allocator.bitmap;
+    bitmap_set_range(bitmap, frame_index, frame_index + count, 1);
+}
+
+/* Free 2M memory frames */
+void free_frames_2M(uint64_t addr)
+{
+    if (!addr) return;
+    size_t frame_index = addr / 4096;
+
+    if (!frame_index) return;
+    bitmap_t *bitmap = &frame_allocator.bitmap;
+    for (size_t i = 0; i < 512; i++) { bitmap_set(bitmap, frame_index + i, 1); }
+}
+
+/* Free 1G memory frames */
+void free_frames_1G(uint64_t addr)
+{
+    if (!addr) return;
+    size_t frame_index = addr / 4096;
+
+    if (!frame_index) return;
+    bitmap_t *bitmap = &frame_allocator.bitmap;
+    for (size_t i = 0; i < 262144; i++) { bitmap_set(bitmap, frame_index + i, 1); }
 }
 
 /* Print memory map */

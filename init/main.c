@@ -17,6 +17,7 @@
 #include "eis.h"
 #include "frame.h"
 #include "gdt.h"
+#include "gfx_truetype.h"
 #include "heap.h"
 #include "hhdm.h"
 #include "ide.h"
@@ -60,11 +61,17 @@ void kernel_entry(void)
     init_sse(); // Initialize SSE/SSE2
     init_avx(); // Initialize AVX/AVX2
 
-    page_init();  // Initialize memory page
-    init_heap();  // Initialize the memory heap
-    video_init(); // Initialize Video
+    init_frame();   // Initialize memory frame
+    page_init();    // Initialize memory page
+    init_heap();    // Initialize the memory heap
+    lmodule_init(); // Initialize the passed-in resource module list
 
-    video_info_t fbinfo = video_get_info();
+#if TTF_CONSOLE
+    init_ttf(get_lmodule("UbuntuSansMono")->data); // Load ttf font
+#endif
+
+    video_init();                           // Initialize Video
+    video_info_t fbinfo = video_get_info(); // Get video info
 
     plogk("%s version %s (%s version %s) SMP %s %s\n", KERNEL_NAME, KERNEL_VERSION, COMPILER_NAME, COMPILER_VERSION, BUILD_DATE, BUILD_TIME);
     plogk("fb0: Base %p, Size %lu KiB.\n", fbinfo.framebuffer, (fbinfo.width * fbinfo.height * fbinfo.bpp) / (uint64_t)(8 * 1024));
@@ -80,7 +87,7 @@ void kernel_entry(void)
     plogk("cpu: NX (Execute Disable) protection = %s\n", cpu_supports_nx() ? "active" : "passive");
     plogk("page: kernel_page_dir = %p\n", get_kernel_pagedir());
     plogk("page: kernel_page_table = %p\n", phys_to_virt(get_cr3()));
-    plogk("heap: Range: %p - %p (%llu KiB)\n", phys_to_virt(heap_start), phys_to_virt(heap_start + heap_size), heap_size / 1024);
+    plogk("heap: Range: %p - %p (%llu KiB)\n", KERNEL_HEAP_START, KERNEL_HEAP_START + KERNEL_HEAP_SIZE, KERNEL_HEAP_SIZE / 1024);
     plogk("x86/PAT: Configuration [0-7]: %s\n", get_pat_config().pat_str);
     plogk("dmi: %s %s, BIOS %s %s\n", smbios_sys_manufacturer(), smbios_sys_product_name(), smbios_bios_version(), smbios_bios_release_date());
 
@@ -98,6 +105,8 @@ void kernel_entry(void)
     init_ps2();           // Initialize PS/2 controller
     smp_init();           // Initialize SMP
     disable_intr();
+    init_task();
+    enable_scheduler();
     init_task();
     enable_scheduler();
     enable_intr();

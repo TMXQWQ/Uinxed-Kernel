@@ -12,6 +12,7 @@
 #ifndef INCLUDE_PAGE_H_
 #define INCLUDE_PAGE_H_
 
+#include "stddef.h"
 #include "stdint.h"
 
 #define MSR_IA32_PAT 0x277
@@ -23,7 +24,12 @@
 #define PTE_NO_EXECUTE   (((uint64_t)0x1) << 63)
 #define KERNEL_PTE_FLAGS (PTE_PRESENT | PTE_WRITEABLE | PTE_NO_EXECUTE)
 
-#define PAGE_SIZE 0x1000
+#define PAGE_SIZE         0x1000
+#define PAGE_FLAGS_MASK   0x000ffffffffff000
+#define HUGE_2M_SIZE      0x200000
+#define HUGE_PAGE_2M_MASK 0x000fffffffe00000
+#define HUGE_1G_SIZE      0x40000000
+#define HUGE_PAGE_1G_MASK 0x000fffffc0000000
 
 typedef struct {
         uint64_t value;
@@ -43,6 +49,12 @@ typedef struct {
         uint8_t types[8];
 } pat_config_t;
 
+/* Determine whether the page table entry maps a huge page */
+int is_huge_page(page_table_entry_t *entry);
+
+/* Enable paging with a phys page directory address */
+void enable_paging(uintptr_t page_directory_phys);
+
 /* Clear all entries in a memory page table */
 void page_table_clear(page_table_t *table);
 
@@ -55,11 +67,11 @@ page_directory_t *get_kernel_pagedir(void);
 /* Returns the page directory of the current process */
 page_directory_t *get_current_directory(void);
 
-/* Iteratively copy memory page tables using an explicit stack */
-void copy_page_table_iterative(page_table_t *source_table, page_table_t *new_table, int level);
+/* Recursively copy memory page tables using an explicit stack */
+void copy_page_table_recursive(page_table_t *source_table, page_table_t *new_table, int level);
 
-/* Iteratively free memory page tables using an explicit stack */
-void free_page_table_iterative(page_table_t *table, int level);
+/* Recursively free memory page tables using an explicit stack */
+void free_page_table_recursive(page_table_t *table, int level);
 
 /* Clone a page directory */
 page_directory_t *clone_directory(page_directory_t *src);
@@ -67,8 +79,14 @@ page_directory_t *clone_directory(page_directory_t *src);
 /* Free a page directory */
 void free_directory(page_directory_t *dir);
 
-/* Maps a virtual address to a physical frame */
+/* Maps a virtual address to a physical frame using 4KB pages */
 void page_map_to(page_directory_t *directory, uint64_t addr, uint64_t frame, uint64_t flags);
+
+/* Maps a virtual address to a physical frame using 2MB huge pages */
+void page_map_to_2M(page_directory_t *directory, uint64_t addr, uint64_t frame, uint64_t flags);
+
+/* Maps a virtual address to a physical frame using 1GB huge pages */
+void page_map_to_1G(page_directory_t *directory, uint64_t addr, uint64_t frame, uint64_t flags);
 
 /* Switch the page directory of the current process */
 void switch_page_directory(page_directory_t *dir);
@@ -80,7 +98,16 @@ void page_map_range(page_directory_t *directory, uint64_t addr, uint64_t frame, 
 /* Maps a contiguous physical memory range to virtual memory */
 void page_map_range_to(page_directory_t *directory, uint64_t frame, uint64_t length, uint64_t flags);
 
-/* Maps random non-contiguous physical pages to the virtual address range */
+/* Maps random non-contiguous physical pages to the virtual address range using 4K page */
+void page_map_range_to_random_4K(page_directory_t *directory, uint64_t addr, uint64_t length, uint64_t flags);
+
+/* Maps random non-contiguous physical pages to the virtual address range using 2M page */
+void page_map_range_to_random_2M(page_directory_t *directory, uint64_t addr, uint64_t length, uint64_t flags);
+
+/* Maps random non-contiguous physical pages to the virtual address range using 1G page */
+void page_map_range_to_random_1G(page_directory_t *directory, uint64_t addr, uint64_t length, uint64_t flags);
+
+/* Intelligently maps random non-contiguous physical pages to the virtual address range */
 void page_map_range_to_random(page_directory_t *directory, uint64_t addr, uint64_t length, uint64_t flags);
 
 /* Get the PAT configuration */

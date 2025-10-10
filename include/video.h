@@ -14,6 +14,14 @@
 
 #include "stdint.h"
 
+#ifndef TTF_CONSOLE
+#    define TTF_CONSOLE 1
+#endif
+
+#ifndef CONSOLE_FONT_SIZE
+#    define CONSOLE_FONT_SIZE 10
+#endif
+
 typedef struct {
         uint8_t red;
         uint8_t green;
@@ -80,8 +88,8 @@ void video_invoke_area(position_t p0, position_t p1, void (*callback)(position_t
 /* Draw a matrix at the specified coordinates on the screen */
 void video_draw_rect(position_t p0, position_t p1, uint32_t color);
 
-/* Draw a character at the specified coordinates on the screen */
-void video_draw_char(const char c, uint32_t x, uint32_t y, uint32_t color);
+/* Flush character buffer to screen */
+void video_flush_buffer(uint32_t color);
 
 /* Print a character at the specified coordinates on the screen */
 void video_put_char(const char c, uint32_t color);

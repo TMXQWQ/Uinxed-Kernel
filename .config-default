@@ -9,6 +9,12 @@
 CONFIG_KERNEL_LOG=y
 
 #
+# Terminal properties
+#
+CONFIG_TTF_CONSOLE=y
+CONFIG_CONSOLE_FONT_SIZE=10
+
+#
 # Processor configuration
 #
 

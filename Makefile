@@ -29,20 +29,34 @@ ifeq ($(CONFIG_KERNEL_LOG), y)
   C_CONFIG += -DKERNEL_LOG=1
 endif
 
+ifeq ($(CONFIG_TTF_CONSOLE), y)
+  C_CONFIG += -DTTF_CONSOLE=1
+endif
+
+ifneq ($(CONFIG_CONSOLE_FONT_SIZE),)
+  C_CONFIG += -DCONSOLE_FONT_SIZE=$(CONFIG_CONSOLE_FONT_SIZE)
+endif
+
 ifneq ($(CONFIG_MAX_CPU_COUNT),)
   C_CONFIG += -DMAX_CPU_COUNT=$(CONFIG_MAX_CPU_COUNT)
 endif
 
 ifeq ($(CONFIG_CPU_FEATURE_FPU), y)
   C_CONFIG += -DCPU_FEATURE_FPU=1
+else
+  C_CONFIG += -mno-mmx -mno-80387
 endif
 
 ifeq ($(CONFIG_CPU_FEATURE_SSE), y)
   C_CONFIG += -DCPU_FEATURE_SSE=1
+else
+  C_CONFIG += -mno-sse -mno-sse2
 endif
 
 ifeq ($(CONFIG_CPU_FEATURE_AVX), y)
   C_CONFIG += -DCPU_FEATURE_AVX=1
+else
+  C_CONFIG += -mno-avx -mno-avx2
 endif
 
 ifneq ($(CONFIG_TTY_DEFAULT_DEV),)
