@@ -80,7 +80,7 @@ pcb_t *init_task()
     current_tasks      = (pcb_t **)calloc(sizeof(pcb_t *), get_cpu_count());
     uint32_t cpu_count = get_cpu_count();
     for (uint32_t i = 0; i < cpu_count; i++) {
-        idle_pcb[i]        = create_kernel_thread(idle_thread, NULL, "System(idle)");
+        idle_pcb[i]        = create_kernel_thread((int (*)(void *))idle_thread, NULL, "System(idle)");
         idle_pcb[i]->level = 3;
         idle_pcb[i]->cpu   = i;
     }

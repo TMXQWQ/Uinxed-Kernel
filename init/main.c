@@ -107,8 +107,6 @@ void kernel_entry(void)
     disable_intr();
     init_task();
     enable_scheduler();
-    init_task();
-    enable_scheduler();
     enable_intr();
 
     for (;;) {
