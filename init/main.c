@@ -109,7 +109,7 @@ void kernel_entry(void)
     enable_intr();
 
     for (;;) {
-        printk("kmain.current_cpu_id:%d\n", get_current_cpu_id());
+        printk("[  Kernel  ]kmain.current_cpu_id:%d\n", get_current_cpu_id());
         __asm__("hlt");
     }
 

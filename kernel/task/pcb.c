@@ -46,7 +46,7 @@ pcb_t *kernel_thread(int (*_start)(void *arg), void *args, char *name)
     new_task->time  = 100;
 
     strcpy(new_task->name, name);
-    uint64_t *stack_top       = (uint64_t *)(new_task + sizeof(pcb_t) + STACK_SIZE);
+    uint64_t *stack_top       = (uint64_t *)(new_task + 1 + STACK_SIZE);
     *(--stack_top)            = (uint64_t)_start;
     new_task->context0.rflags = 0x202;
     new_task->context0.rip    = (uint64_t)_start;
@@ -85,6 +85,7 @@ pcb_t *init_task()
         idle_pcb[i]->cpu   = i;
     }
     int *p   = (int *)malloc(sizeof(int));
+    if(p==NULL) panic("No enough Memory to alloc for args\r\n");
     *p       = 114514;
     init_pcb = create_kernel_thread((int (*)(void *))init_kmain, p, "init");
     plogk("idle stack: %p\tinit stack:%p\n", (void *)((uintptr_t)idle_pcb[0]->context0.rsp), (void *)((uintptr_t)init_pcb->context0.rsp));
